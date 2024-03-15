@@ -1,0 +1,11 @@
+radc.o: ./radc.inc
+radc.o: ./simulate.inc
+radc.o: ./radc.inc
+radc.o: ./radc.inc
+radc.o: ./structures.inc
+radc.o: ./simulate.inc
+radc.o: ./radc.inc
+radc.o: ./radc.inc
+radc.o: ./simulate.inc
+radc.o: ./radc.inc
+radc.o: ./constants.inc

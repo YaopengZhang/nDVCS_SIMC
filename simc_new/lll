@@ -1,0 +1,1 @@
+/usr/bin/gfortran  -C -g -fbounds-check  -fno-automatic $1.f -L$CERN_ROOT/lib  -lpacklib   -lmathlib -lkernlib -ljetset74 -o $1
