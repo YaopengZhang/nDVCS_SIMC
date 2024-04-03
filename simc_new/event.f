@@ -455,7 +455,8 @@ C DJG spectrometer
 ! PB: distribution is truncated on low mass side at P + pi mass
 c PB: 9/5/22 changed to use actual Breit-Wigner shape generated
 c PB: from resmod507 in first call to semi_physics.f
-	if((which_pion.eq.2 .or. which_pion.eq.3).and.first) then
+c pyb: changed from 2 and 3 to 4 and 5 (2,3 now pi0)
+	if((which_pion.eq.4 .or. which_pion.eq.5).and.first) then
 	   open(unit=55,file='delta_relativistic_bw.inp')
 	   probtot = 0. 
 	   do i=1,1000
@@ -1434,7 +1435,7 @@ C Use Clebsch-Gordon coefficients to approximate xsec for Delta final states
 C This ignores the fact that the g*p and g*n cross sections may not be the same
 C 6/24/2021: Coefficients for Delta final states updated from Peter Bosted's
 C empirical check's.
-	  if(which_pion.eq.2) then ! pi+ Delta
+	  if(which_pion.eq.4) then ! pi+ Delta
 	     if(doing_hydpi) then
 c		main%sigcc = main%sigcc/4.0 !(pi+ Delta0)/(pi+ n)
 c		main%sigcc = 0.6*main%sigcc !(pi+ Delta0)/(pi+ n)
@@ -1447,7 +1448,20 @@ c     >                      + 1.0*main%sigcc !(pi+ Delta-)/(pi+ n)
 		main%sigcc = 0.4*main%sigcc !(pi+ Delta0)/pi+ n)   updated 17july2023
      >                      + 0.8*main%sigcc !(pi+ Delta-)/(pi+ n)
 	     endif 
-	  elseif (which_pion.eq.3) then  !pi- Delta
+	  elseif (which_pion.eq.5) then  !pi- Delta
+	     if(doing_hydpi) then
+c		main%sigcc = 0.6*main%sigcc ! (pi- Delta++)/(pi- p)
+		main%sigcc = 0.55*main%sigcc ! (pi- Delta++)/(pi- p)  updated 17july2023
+	     elseif(doing_deutpi) then
+c		main%sigcc = 3.0*main%sigcc/5.0 ! (pi- Delta++)/(pi- p)
+c     >                     + 0.25*main%sigcc !(pi- Delta+)/(pi- p)
+c		main%sigcc = 0.6*main%sigcc ! (pi- Delta++)/(pi- p)
+c     >                     + 0.6*main%sigcc !(pi- Delta+)/(pi- p)
+		main%sigcc = 0.55*main%sigcc ! (pi- Delta++)/(pi- p)  updated 17july2023
+     >                     + 0.99*main%sigcc !(pi- Delta+)/(pi- p)
+	     endif
+c pyb xxx adjust cooeficients here to match data
+ 	  elseif (which_pion.eq.3) then  !pi0 Delta
 	     if(doing_hydpi) then
 c		main%sigcc = 0.6*main%sigcc ! (pi- Delta++)/(pi- p)
 		main%sigcc = 0.55*main%sigcc ! (pi- Delta++)/(pi- p)  updated 17july2023

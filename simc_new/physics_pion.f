@@ -32,7 +32,7 @@
         real*8 ebeamcm,pbeamcm,pbeamcmx,pbeamcmy,pbeamcmz !p_beam in C.M.
         real*8 etarcm,ptarcm,ptarcmx,ptarcmy,ptarcmz	!p_fermi in C.M.
         real*8 thetacm,phicm,phiqn,jacobian,jac_old
-	real*8 Wgev, Q2gev, E0, cthcm, sig0, fac1
+	real*8 Wgev, Q2gev, E0, cthcm, sig0, fac1, sig0n
 
 	real*8 sig_multipole,sig_blok,sig_param04,sig_param_3000,sig_param_2021
 
@@ -135,8 +135,16 @@ c	if(main%wcm.lt.2300) then ! W less than 2.3 GeV
 	   cthcm = cos(thetacm)
 	   E0 = vertex%Ein/1000.0  !convert to GeV
 	   ipi = 3 ! pi+ by default
-	   if (which_pion.eq.1 .or. which_pion.eq.11 .or. which_pion.eq.3) ipi=4 ! pi-
+	   if (which_pion.eq.1 .or. which_pion.eq.11 .or. 
+c pyb changed from 3 to 5
+     >          which_pion.eq.5) ipi=4 ! pi-
+	   if(which_pion.eq.2 .or. which_pion.eq.3) ipi=1
 	   call sigmaid(ipi,Q2gev,Wgev,E0,cthcm,phicm,sig0)
+c pyb added pi0 n if deuteron target
+	   if(ipi.eq.1 .and. targ%A>1.5) then
+ 	    call sigmaid(2,Q2gev,Wgev,E0,cthcm,phicm,sig0n)
+	    sig0 = (sig0 + sig0n) 
+	   endif
 ! convert from mub / dOmega* to mub / dt / dphi*
 	   ntup%sigcm2 = sig0 / ppicm / qstar / 2.
 cc       smoothly join between W of 1.7 and 2.3
@@ -422,7 +430,7 @@ C				  7:-----S1+
 	  siglt= 0.0*sin(thetacm)
 	  sigtt= -(4.0*sigl+0.5*sigt)*(sin(thetacm))**2
 
-	  if (which_pion.eq.1 .or. which_pion.eq.11 .or. which_pion.eq.3) then	!pi-
+	  if (which_pion.eq.1 .or. which_pion.eq.11 .or. which_pion.eq.5) then	!pi-
 	    sigt =sigt *0.25*(1.+3.*exp(-10.*abs(t)))
 	    sigtt=sigtt*0.25*(1.+3.*exp(-10.*abs(t)))
 	  endif
@@ -488,7 +496,7 @@ C				  7:-----S1+
 
 
 CDG For now assume sigL(pi+)=sigL(pi-)
-	if (which_pion.eq.1 .or. which_pion.eq.11 .or. which_pion.eq.3) then	!pi-
+	if (which_pion.eq.1 .or. which_pion.eq.11 .or. which_pion.eq.5) then	!pi-
 	   sigt =sigt *0.25*(1.+3.*exp(-10.*abs(t)))
 	   sigtt=sigtt*0.25*(1.+3.*exp(-10.*abs(t)))
 	endif
@@ -545,7 +553,7 @@ CDG For now assume sigL(pi+)=sigL(pi-)
 
 
 CDG For now assume sigL(pi+)=sigL(pi-)
-	if (which_pion.eq.1 .or. which_pion.eq.11 .or. which_pion.eq.3) then	!pi-
+	if (which_pion.eq.1 .or. which_pion.eq.11 .or. which_pion.eq.5) then	!pi-
 	   sigt =sigt *0.25*(1.0+3.0*exp(-10.0*abs(t)))
 	   sigtt=sigtt*0.25*(1.0+3.0*exp(-10.0*abs(t)))
 	endif
@@ -734,8 +742,9 @@ c W>1.4. Note: this was *not* done for eg1c!
 ! q2, t, and wsq should be in gev**2
 ! thcm and phicm should be in radians
 ! Peter Bosted, from output of ~bosted/ptc/ptb.f
+! 3/2024 added pi0 first guess
       implicit none
-      real*8 thcm,phicm,t,q2,wsq,eps
+      real*8 thcm,phicm,t,q2,wsq,eps,sigexcl3m,sigexcl3p
       real*8 sigl,sigt,sigttv,sigltv,sigexcl3
       integer which_pion
       common/excmn/sigl,sigt,sigttv,sigltv
@@ -776,27 +785,39 @@ c W>1.4. Note: this was *not* done for eg1c!
      >    -1.00355,
      >     0.05055/
 
-      if (which_pion.eq.1.or.which_pion.eq.11.or.which_pion.eq.3) then
+! pi-
+      if (which_pion.eq.1.or.which_pion.eq.11.or.which_pion.eq.5) then
        call exclfit(t,thcm,phicm,q2,
-     >    wsq,eps,sigl,sigt,sigttv,sigltv,sigexcl3,pm)
-      else ! pi+
+     >    wsq,eps,sigl,sigt,sigttv,sigltv,sigexcl3,pm,1.0)
+      endif
+! pi+
+      if (which_pion.eq.0.or.which_pion.eq.10.or.which_pion.eq.4) then
        call exclfit(t,thcm,phicm,q2,
-     >    wsq,eps,sigl,sigt,sigttv,sigltv,sigexcl3,pp)
+     >    wsq,eps,sigl,sigt,sigttv,sigltv,sigexcl3,pp,1.0)
+      endif
+! pyb for pi0 use average of pi+ and pi- but turn off pion form factor
+      if (which_pion.eq.2.or.which_pion.eq.3) then
+       call exclfit(t,thcm,phicm,q2,
+     >    wsq,eps,sigl,sigt,sigttv,sigltv,sigexcl3p,pp,0.0)
+       call exclfit(t,thcm,phicm,q2,
+     >    wsq,eps,sigl,sigt,sigttv,sigltv,sigexcl3m,pm,0.0)
+       sigexcl3 = sigexcl3m + sigexcl3p
       endif
       sig_param_2021 = sigexcl3
       return 
       end
 
       subroutine exclfit(t,thetacm,phicm,q2_gev,
-     >  s_gev,eps,sigl,sigt,sigtt,siglt,sig,p)
+     >  s_gev,eps,sigl,sigt,sigtt,siglt,sig,p,fpifact)
 
       implicit none
       real*8 p(15),t,thetacm,phicm,q2_gev,s_gev,eps,sigl
       real*8  sigt,sigtt,siglt,sig,mtar_gev/0.938/
-      real*8 fpi,q2fpi2,sig219
+      real*8 fpi,q2fpi2,sig219,fpifact
 
-       fpi = 1. / 
+       fpi = fpifact / 
      >  (1.0 + p(1)*q2_gev + p(2)*q2_gev**2)
+
 
        q2fpi2 = q2_gev * fpi**2
 

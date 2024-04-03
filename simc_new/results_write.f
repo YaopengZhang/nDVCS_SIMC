@@ -16,6 +16,9 @@
 !	real*8 mm,mm2		!missing mass (assuming struck nucleon)
 !	real*8 mmA,mmA2		!missing mass (assuming struck nucleus)
 	real*8 Pm_Heepx,Pm_Heepy,Pm_Heepz	!Pm components for Heepcheck.
+   	real*8 v1(4),v2(4),v3(4),ampi0/0.135/,amgam/0./,costh,phi
+	real*8 x1,x2,y1,y2,dy,npsxmin,npsymin,npsemin,mchk
+	real*8 grnd		!random # generator.
 
 !local (e,e'pi/K) calculations:
 !	real*8 t		!t
@@ -29,6 +32,85 @@
 ! add option to write event even if it failed when doing_phsp.
 
 	if (.not.success) return
+
+c pyb don't write zero weight events (for example from
+c excl pi- on p or low energy rhos)
+        if(main%weight.eq.0.) return
+
+C Pyb added this section for NPS experiment.
+c if doing pi0 in final state, have it decay into two photons
+c with 98.55 b.r. 
+	if(which_pion.eq.2.or.which_pion.eq.3) then
+	 v1(1) = vertex%p%E / 1000.
+	 v1(2) = vertex%p%P * vertex%up%x / 1000.
+	 v1(3) = vertex%p%P * vertex%up%y / 1000.
+	 v1(4) = vertex%p%P * 
+     >    sqrt(1. - vertex%up%x**2 - vertex%up%y**2)  / 1000. 
+	 costh = -1. + 2.0 * grnd()
+	 phi = 2. * pi * *grnd()
+	 mchk = sqrt(v1(1)**2 - v1(2)**2 - v1(3)**2 - v1(4)**2)
+	 if(mchk-ampi0.gt.0.001) write(6,'(''mchk'',2f8.4)')
+     >    mchk,ampi0
+         call  DECAY (V1,V2,V3,ampi0,amgam,amgam,COSTH,PHI)
+c	 write(6,'(/6f7.3)') v1,costh,phi
+	 x1 = v2(2)/v2(1) * 300.
+	 dy = atan(v2(3)/v2(4)) - spec%p%theta
+	 y1 = dy * 300.
+c 	 write(6,'(6f7.3)') v2,x1,y1
+	 x2 = v3(2)/v3(1) * 300.
+	 dy = atan(v3(3)/v3(4)) - spec%p%theta
+	 y2 = dy * 300.
+c         write(6,'(6f7.3)') v3,x2,y2
+c would at least one photon hit the NPS at 300 cm and
+c have an energy above 150 MeV?
+	 npsxmin = 40.
+	 npsymin = 40.
+	 npsemin = 0.15
+	 if((abs(x1).lt.npsxmin .and.
+     >       abs(y1).lt.npsymin .and.
+     >       v2(1).gt.npsemin) .or. 
+     >      (abs(x2).lt.npsxmin .and.
+     >       abs(y2).lt.npsymin .and.
+     >      v3(1).gt.npsemin)) then
+	  write(88,288) 
+     >    main%weight,
+     >    main%sigcc,				!d5sig
+     >    ntup%sigcm,                          !pion sig_cm
+     >    min(999.,max(-999.,recon%e%delta)), 
+     >    min(999.,max(-999.,recon%e%yptar*100.)), 
+     >    min(999.,max(-999.,recon%e%xptar*100.)), 
+     >    min(999.,max(-999.,recon%e%z)),
+     >    min(999.,max(-999.,main%FP%e%x)), 
+     >    min(999.,max(-999.,main%FP%e%dx*100.)), 
+     >    min(999.,max(-999.,main%FP%e%y)), 
+     >    min(999.,max(-999.,main%FP%e%dy*100.)),
+     >    min(999.,max(-999.,v2(2))), 
+     >    min(999.,max(-999.,v2(3))), 
+     >    min(999.,max(-999.,v2(4))), 
+     >    min(999.,max(-999.,v3(2))), 
+     >    min(999.,max(-999.,v3(3))), 
+     >    min(999.,max(-999.,v3(4))), 
+     >    min(999.,max(-999.,-main%target%z*spec%p%sin_th)),
+     >    min(999.,max(-999.,-main%target%rastery)),
+     >	  min(999.,max(-999.,main%thetacm)),
+     >    min(999.,max(-999.,main%phicm)), 
+     >    min(999.,max(-999.,main%t/1.e6)),
+     >    min(999.,max(-999.,orig%e%delta)),
+     >    min(999.,max(-999.,orig%e%xptar*100.)),			!mr
+     >    min(999.,max(-999.,orig%e%yptar*100.)),			!mr
+     >    min(999.,max(-999.,-main%target%z*spec%e%sin_th)),
+     >    min(999.,max(-999.,recon%theta_pq)),
+     >    min(999.,max(-999.,recon%phi_pq)),
+     >    min(999.,max(-999.,main%phi_pq))
+
+ 288	  format(3e12.4,28f9.4)
+	 endif
+	 return
+	endif
+
+c pyb added this section
+c If doing_dvcs, just write out the single photon
+c xxx not done yet!
 
 *	if (phot1.gt.lim1) write(6,*) 'phot1,lim1=',phot1,lim1
 *	if (phot2.gt.lim2) then
@@ -227,6 +309,7 @@ c	  ntu(11) = vertex%p%xptar			!mr
 	  ntu(44) = main%weight
 	endif
 
+
 c	call HFN(NtupleID,ntu)
 	do i=1,NtupleSize
 	   write(NtupleIO) ntu(i)
@@ -271,3 +354,77 @@ c	call HFN(NtupleID,ntu)
 	if (debug(2)) write(6,*)'r_ntu_write: ending'
 	return
 	end
+C SUBROUTINE TO DECAY A PARTICLE INTO TWO OTHER PARTICLES
+C AT angle COSTH in THE C.M. FRAME WHERE THE DIRECTION OF THE
+C INITIAL PARTICLE NEED NOT BE ALONG THE Z-AXIS. PHI SHOULD BE 0 TO 2 PI
+C vectors are (E, px, py, pz)
+      SUBROUTINE DECAY (V1,V2,V3,M1,M2,M3,COSTH,PHI)
+      IMPLICIT NONE
+      REAL*8 V1(4),V2(4),V3(4),KV(4),M1,M2,M3,V1P,G,K,COSTH,SINTH,PHI
+      REAL*8 CHK,CHK1,CHK2,KCHK,BETA,VT(4),VTT(4),VDM
+! Find magnitude of momentum of initial particle
+      V1P=SQRT(V1(2)**2+V1(3)**2+V1(4)**2)
+      G=V1(1)/M1
+      BETA=V1P/V1(1)
+
+! Find c.m. momentum and pick decay isotropically
+      K=SQRT(( ((M1**2-M2**2-M3**2)/2.)**2 - (M2*M3)**2 )/M1**2)
+      KCHK=SQRT((M1**2-(M2+M3)**2)*(M1**2-(M2-M3)**2))/2./M1
+      IF(ABS(K-KCHK).GT.0.001) WRITE(6,'(1X,''ERROR,K,KCHK='',2F10.4)')
+     >  K,KCHK
+      IF(ABS(SQRT(K*K+M2*M2)+SQRT(K*K+M3*M3)-M1).GT.0.001)
+     >  WRITE(6,'(1X,''ERROR IN CM ENERGY'')')
+      SINTH=SQRT(1.-COSTH**2)
+! Put k into vector for first decay particle
+      KV(1)=SQRT(K*K+M2*M2)
+      KV(2)=K*SINTH*COS(PHI)
+      KV(3)=K*SINTH*SIN(PHI)
+      KV(4)=K*COSTH
+! Transform k to lab frame for first decay particle
+! First find vector as though decay were along Z axis
+      V2(1)=G*(KV(1)+BETA*KV(4))
+      VT(2)=KV(2)
+      VT(3)=KV(3)
+      VT(4)=G*(BETA*KV(1)+KV(4))
+! Now rotate vector in xz plane
+      VDM=SQRT(V1(2)**2+V1(4)**2)
+      VTT(2)= VT(2)*V1(4)/VDM+VT(4)*V1(2)/VDM
+      VTT(3)= VT(3)
+      VTT(4)=-VT(2)*V1(2)/VDM+VT(4)*V1(4)/VDM
+! Now rotate vector in yz plane
+      VDM=SQRT(V1(3)**2+V1(4)**2)
+      V2(2)= VTT(2)
+      V2(3)= VTT(3)*V1(4)/VDM + VTT(4)*V1(3)/VDM
+      V2(4)=-VTT(3)*V1(3)/VDM + VTT(4)*V1(4)/VDM
+! Transform k to lab frame for first  decay particle
+      CHK=V2(1)**2-V2(2)**2-V2(3)**2-V2(4)**2-M2**2
+      IF(ABS(CHK).GT.0.005) WRITE(6,'(1X,''ERROR, CHK='',E9.2)') CHK
+! Put k into vector for second decay particle
+      KV(1)=SQRT(K*K+M3*M3)
+      KV(2)=-K*SINTH*COS(PHI)
+      KV(3)=-K*SINTH*SIN(PHI)
+      KV(4)=-K*COSTH
+! Transform k to lab frame for second decay particle
+! First find vector as though decay were along Z axis
+      V3(1)=G*(KV(1)+BETA*KV(4))
+      VT(2)=KV(2)
+      VT(3)=KV(3)
+      VT(4)=G*(BETA*KV(1)+KV(4))
+! Now rotate vector in xz plane
+      VDM=SQRT(V1(2)**2+V1(4)**2)
+      VTT(2)= VT(2)*V1(4)/VDM+VT(4)*V1(2)/VDM
+      VTT(3)= VT(3)
+      VTT(4)=-VT(2)*V1(2)/VDM+VT(4)*V1(4)/VDM
+! Now rotate vector in yz plane
+      VDM=SQRT(V1(3)**2+V1(4)**2)
+      V3(2)= VTT(2)
+      V3(3)= VTT(3)*V1(4)/VDM + VTT(4)*V1(3)/VDM
+      V3(4)=-VTT(3)*V1(3)/VDM + VTT(4)*V1(4)/VDM
+      CHK=V3(1)**2-V3(2)**2-V3(3)**2-V3(4)**2-M3**2
+      IF(ABS(CHK).GT.0.005) WRITE(6,'(1X,''ERROR, CHK='',E9.2)') CHK
+      CHK1=V1(1)-V2(1)-V3(1)
+      CHK2=V1(2)-V2(2)-V3(2)+V1(3)-V2(3)-V3(3)+V1(4)-V2(4)-V3(4)
+      IF(ABS(CHK1).GT.0.005.OR.ABS(CHK2).GT.0.05) WRITE(6,
+     >  '(1X,''E12='',14F5.2)') CHK1,CHK2,V1,V2,V3
+      RETURN
+      END

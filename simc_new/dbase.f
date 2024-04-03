@@ -14,13 +14,16 @@
 !
 ! 3. doing_pion:(e,e'p) subcases:doing_hydpi, doing_deutpi,doing_hepi.
 !	which_pion =  0( 1) gives pi+ (pi-) quasifree production.
+!	which_pion =  2 gives pi0 quasifree production.
 !	which_pion = 10(11) gives pi+ (pi-) coherent production.
 !	This sets doing_hydpi true for ALL targets (i.e. treat as
 !	a heavy proton) but with targ.Mtar_struck and targ.Mrec_struck
 !	set appropriately.
 !       Added additional options for which_pion:
-!       which_pion = 2: gamma* p -> pi+ Delta0,  gamma* D -> pi+ Delta0 n, or -> pi+ Delta- p
-!       which_pion = 3: gamma* p -> pi- Delta++, gamma* D -> pi- Delta++ n, or -> pi- Delta+ p
+!pyb changed definitions so that 2, 3 are for pi0 p, Delta 
+!       which_pion = 3: gamma* p -> pi0 Delta+,  gamma* D -> pi0 Delta+ n, or -> pi0 Delta0 p
+!       which_pion = 4: gamma* p -> pi+ Delta0,  gamma* D -> pi+ Delta0 n, or -> pi+ Delta- p
+!       which_pion = 5: gamma* p -> pi- Delta++, gamma* D -> pi- Delta++ n, or -> pi- Delta+ p
 !
 ! 4. doing_phsp:Generate acceptance with radiation and cross section disabled,
 !	use doing_kaon or doing_pion to set hadron mass, then 
@@ -34,7 +37,7 @@
 !	a 'shortcut' version to start with.
 ! 6. doing_semi: H(e,e'pi)X (doing_semipi) and H(e,e'k)X (doing_semika) 
 ! 7. doing_rho: H(e,e'rho)p, D(e,e'rho)p, 3He(e,e'rho)p
-
+! 8. pyb added doing_dvcs p(e,e' gamma)p and n(e,e'gamma)n
 	implicit none
 	include 'radc.inc'
 	include 'histograms.inc'
@@ -47,7 +50,7 @@
 	integer*4 i, j, k, ii
 	integer*4 ierr, thload, thbook
 	logical success
-	character filename*80,tmpfile*80
+	character filename*80,tmpfile*80,f88*100
 	character dbase_file*60 !needs to be shorter than filename
 
 	type (histograms):: H
@@ -63,6 +66,30 @@
 
 ! ... read the dbase file.
 
+	dbase_file=' '
+	extra_dbase_file=' '
+c first try env. variable SIMCIN
+	call getenv('SIMCIN',dbase_file)
+	j=index(dbase_file,'/')
+	if (j.eq.0) then					!no path given
+	  write(filename,'(a)') 'infiles/'//dbase_file
+	else
+	  write(filename,'(a)') dbase_file
+	endif
+	i=index(filename,'.')
+	j=index(filename,'/')
+	if(i.eq.0) then		!add .inp if not included in filename
+	  i=index(filename,' ')
+	  if(i+2.le.len(filename)) write(filename(i:),'(''.inp'')')
+	endif
+	write(6,'(a10,a69)')'filename=',filename
+	if (i.gt.1) base=filename(j+1:i-1)
+        write(start_random_state_file,'(a)') 'outfiles/'//filename(j+1:i-1)//'_start_random_state.dat'
+! ... load and book input file
+	ierr = thload(filename)
+	if (ierr.eq.0) goto 11
+
+c if didn't load, try user input
 	dbase_file=' '
 	extra_dbase_file=' '
 	write(6,*) 'Enter the input filename (assumed to be in infiles directory)'
@@ -87,8 +114,14 @@
 
 	ierr = thload(filename)
 	if (ierr.ne.0) stop 'Loading problem!  Not going to try again...wouldnt be prudent.'
-	ierr = thbook()
+
+ 11	ierr = thbook()
 	if (ierr.ne.0) stop ' Booking problem!  Not going to try again...wouldnt be prudent'
+
+c open text output file
+	write(f88,'(a)') 'wrktxt/'//base
+	open(unit=88, file=f88)
+
 
 ! ... read the secondary dbase file.
 
@@ -121,11 +154,17 @@ C DJG: Ugly hack! This must come before the test on doing_pion
 	   doing_semipi=.false.
 	   doing_kaon=.false.
 	endif
+! anoher hack, in case someone tries to do pion and dvcs at same time
+c then dvcs overrides
+	if(doing_dvcs) doing_pion=.false.
 C DJG:
 
 ! ... dbase field experiment.
 	if (doing_pion) then
 	  Mh=Mpi
+c pyb added this
+	  if(which_pion.eq.2) Mh = Mpi * 0.135/0.1396
+	  if(which_pion.eq.3) Mh = Mpi * 0.135/0.1396
 	  if (nint(targ%A).eq.1 .and. which_pion.eq.1) 
      >		stop 'Pi- production from Hydrogen not allowed!'
 	  if (nint(targ%A).le.2 .and. which_pion.ge.10) 
@@ -146,6 +185,13 @@ C DJG:
 	    doing_deutpi = .false.
 	    doing_hepi = .false.
 	  endif
+
+	else if (doing_dvcs) then
+	  Mh=0.
+	  doing_hydpi = (nint(targ%A).eq.1)
+	  doing_deutpi = (nint(targ%A).eq.2)
+	  doing_hepi = (nint(targ%A).ge.3)
+	  doing_eep = .false.
 
 	else if (doing_kaon) then
 	  Mh=Mk
@@ -169,15 +215,18 @@ C DJG:
 	else if (doing_delta) then
 	  Mh=Mp
 	  if (nint(targ%A).ge.2) 
-     >      write(6,*) 'WARNING: Delta cross section model only set up for proton target!'
-	  doing_hyddelta = (nint(targ%A).eq.1)
-	  doing_deutdelta = (nint(targ%A).eq.2)
-	  doing_hedelta = (nint(targ%A).ge.3)
-	  doing_eep = .false.
+     >      write(6,'(''WARNING: Delta cross section model '',
+     >     "only for p  target!")')
+     	  doing_hyddelta = (nint(targ%A).eq.1)
+     	  doing_deutdelta = (nint(targ%A).eq.2)
+     	  doing_hedelta = (nint(targ%A).ge.3)
+     	  doing_eep = .false.
 
 	else if (doing_semi) then
 	   if(doing_semipi) then
 	      Mh=Mpi
+c pyb added this
+  	    if(which_pion.eq.2) Mh = Mpi * 0.135/0.1396
 	   elseif(doing_semika) then
 	      Mh=Mk
 	   endif
@@ -237,9 +286,11 @@ C DJG:
 	  stop 'I dont know what phi should be for the electron arm'
 	endif
 
+! hadron arm = 10 is for accept everything in NPS on SOS/SHMS side
 	if (hadron_arm.eq.1 .or. hadron_arm.eq.3) then
 	  spec%p%phi = 3*pi/2.
 	else if (hadron_arm.eq.2 .or. hadron_arm.eq.4 .or.
+     >		 hadron_arm.eq.10 .or. 
      >		 hadron_arm.eq.5 .or. hadron_arm.eq.6) then
 	  spec%p%phi = pi/2.
 	else
@@ -310,20 +361,43 @@ C DJG:
 ! ... for bound final state, use targ.Mrec if it appears to be OK (same A
 ! ... A as target, with one n->p or p->n.
 
+	else if (doing_dvcs) then
+           if(nint(targ%A).eq.2) then
+	    targ%Mtar_struck = (Mn+Mp)/2. ! gamma nucleon final state
+	    targ%Mrec_struck = (Mp+Mn)/2.
+	   else
+	    targ%Mtar_struck = Mp      ! p(e,e'gamma) p
+	    targ%Mrec_struck = Mp
+	   endif
 	else if (doing_pion) then
 	  if (which_pion .eq. 0) then
 	    targ%Mtar_struck = Mp      ! H(e,e'pi+)n or D(e,e'pi+)nn
 	    targ%Mrec_struck = Mn
-	    sign_hadron=1.0
+	    sign_hadron = 1.0
 	  else if (which_pion .eq. 1) then
 	    targ%Mtar_struck = Mn      ! D(e,e'pi-) pp
 	    targ%Mrec_struck = Mp
-	    sign_hadron=-1.0
-	  else if (which_pion .eq. 2 ) then
+	    sign_hadron = -1.0
+	  else if (which_pion .eq. 2) then
+           if(nint(targ%A).eq.2) then
+	    targ%Mtar_struck = (Mn+Mp)/2. ! pi0 nucleon final state
+	    targ%Mrec_struck = (Mp+Mn)/2.
+	   else
+	    targ%Mtar_struck = Mp      ! p(e,e'pi0) p
+	    targ%Mrec_struck = Mp
+	   endif
+	    sign_hadron = 0.0
+	  else if (which_pion .eq. 3 ) then
+	    targ%Mtar_struck = Mp      ! pi0 Delta final state
+	    targ%Mrec_struck = MDelta
+	    sign_hadron = 0.0
+c pyb changed from 2 to 4
+	  else if (which_pion .eq. 4 ) then
 	    targ%Mtar_struck = Mp      ! H(e,e'pi+)Delta0, D(e,e'pi+)nDelta0, D(e,e'pi+)pDelta-
 	    targ%Mrec_struck = MDelta
 	    sign_hadron = 1.0
-	  else if (which_pion .eq. 3) then
+c pyb changed from 3 to 5
+	  else if (which_pion .eq. 5) then
 	    targ%Mtar_struck = Mp      ! H(e,e'pi-)Delta++, D(e,e'pi-)nDelta++, D(e,e'pi-)pDelta+
 	    targ%Mrec_struck = MDelta
 	    sign_hadron = -1.0
@@ -719,16 +793,18 @@ C DJG:
 	  else
 	    stop 'I don''t have ANY idea what (e,e''pi) we''re doing!!!'
 	  endif
-	  if (which_pion.eq.0 .or. which_pion.eq.10 .or. which_pion.eq.2) then
+	  if (which_pion.eq.0 .or. which_pion.eq.10 .or. which_pion.eq.4) then
 	    write(6,*) ' ****-------  pi+ production  -------****'
-	  else if (which_pion.eq.1 .or. which_pion.eq.11 .or. which_pion.eq.3) then
+	  else if (which_pion.eq.1 .or. which_pion.eq.11 .or. which_pion.eq.5) then
 	    write(6,*) ' ****-------  pi- production  -------****'
+	  else if (which_pion.eq.2 .or. which_pion.eq.3) then
+	    write(6,*) ' ****-------  pi0 production  -------****'
 	  endif
 	  if (which_pion.eq.0 .or. which_pion.eq.1) then
 	    write(6,*) ' ****---- Quasifree Production ----****'
 	  else if (which_pion.eq.10 .or. which_pion.eq.11) then
 	    write(6,*) ' ****----  Coherent Production ----****'
-	  else if (which_pion.eq.2 .or. which_pion.eq.3) then
+	  else if (which_pion.ge.3 .and. which_pion.le.5) then
 	    write(6,*) ' ****---- Quasifree Production - Delta final state ----****'
 	  endif
 	else if (doing_kaon) then
@@ -897,6 +973,7 @@ c	      stop
 	ierr = regparmint('doing_hplus', doing_hplus,1)
 	ierr = regparmint('doing_rho',doing_rho,0)
 	ierr = regparmint('doing_decay',doing_decay,0)
+	ierr = regparmint('doing_dvcs',doing_dvcs,0)
 	ierr = regparmdouble('ctau',ctau,0)
 
 *	DEBUG

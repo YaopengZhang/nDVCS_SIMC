@@ -1,0 +1,26 @@
+#!/bin/tcsh
+cd /u/group/c-sidis/bosted/simc_new
+setenv SIMCIN simc_21_LH2_dvcs.inp                                                            
+./simc
+setenv SIMCIN simc_21_LH2_excl.inp                                                            
+./simc
+setenv SIMCIN simc_21_LH2_dlta.inp                                                            
+./simc
+setenv SIMCIN simc_21_LH2_semi.inp                                                            
+./simc
+setenv SIMCIN simc_21_LD2_dvcs.inp                                                            
+./simc
+setenv SIMCIN simc_21_LD2_excl.inp                                                            
+./simc
+setenv SIMCIN simc_21_LD2_dlta.inp                                                            
+./simc
+setenv SIMCIN simc_21_LD2_semi.inp                                                            
+./simc
+setenv SIMCIN simc_21_DUM_dvcs.inp                                                            
+./simc
+setenv SIMCIN simc_21_DUM_excl.inp                                                            
+./simc
+setenv SIMCIN simc_21_DUM_dlta.inp                                                            
+./simc
+setenv SIMCIN simc_21_DUM_semi.inp                                                            
+./simc

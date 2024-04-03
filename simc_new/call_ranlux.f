@@ -24,7 +24,7 @@ c
 c
       call RLUXUT(IVEC)
       
-      open(unit=1,file=fname)
+      open(unit=1,file='randseed.txt')
       do i=1,25
       write(1,*) ivec(i)
       enddo

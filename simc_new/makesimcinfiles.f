@@ -2,9 +2,9 @@
 c this is for the 2023-24 NPS runs
       implicit none
       integer i,j,k,it,ikin,itarg,iprocess
-      integer ngen
+      integer ngen,rseed
       real*8 ebeam,phms,thhms,pipeak
-      real*8 pnps,thnps
+      real*8 pnps,thnps,delmin,egammax
       real*8 hmp_x, hmp_y, pmp_x, pmp_y,z,zp
       real*8 tgt_A,tgt_z,tgt_amu,tgt_rho,tgt_t
 
@@ -31,8 +31,9 @@ c this is for the 2023-24 NPS runs
      >   12.200, 19.15, 21.70,13.43, 16.88, 14.00,
      >   16.72, 20.15, 14.08, 17.51, 7.500, 7.500, 11.20/
       character*3 tname(3)/'LH2','LD2','DUM'/
-      character*5 pname(4)/' dvcs',' excl','delta','sidis'/
+      character*4 pname(4)/'dvcs','excl','dlta','semi'/
       character*80 fname,fname2
+      character*2 ckin,crun
 
 c make the json file. Each job does all targets and processes for
 c a given kinematic setting
@@ -54,10 +55,10 @@ c loop over kinematics
      >  '"cpu_Cores": 1, "account":', 
      >  '"hallc", "name": "simc',i2.2,'", "shell": "/usr/',
      >  'bin/tcsh", "timeSecs": 28800}')
-        write(51,1223) fname2
+        write(51,1223)
  1223   format(
      >  '#!/bin/tcsh'/
-     >  'cd /u/group/c-sidis/bosted/simc'/
+     >  'cd /u/group/c-sidis/bosted/simc_new')
 c loop over targets
        do itarg = 1,3
 c loop over processes
@@ -67,12 +68,12 @@ c open the input file
          write(ckin,'(i2.2)') ikin
          write(fname2,123) ikin,tname(itarg),pname(iprocess)
  123     format('simc_',i2.2,'_',a,'_',a,'.inp')
-         fname = 'infiles'//fname2
+         fname = 'infiles/'//fname2
          open(unit=15,file=fname)
 
 c add to batch script
-         write(51,1223) fname2
- 1223    format(
+         write(51,1224) fname2
+ 1224    format(
      >    'setenv SIMCIN ',a/
      >    './simc')
 
@@ -131,25 +132,33 @@ c how many events to generate. Making it smallish for now
          if(iprocess.eq.2) ngen = 10000
          if(iprocess.eq.3) ngen =  2000
          if(iprocess.eq.4) ngen =  20000
-         write(15,3222) ngen * zfact
+         write(15,3222) ngen
  3222    format('  ngen = ',i7,'	        ;  POS: # of successe')
 
          write(15,'("EXPER%charge = 1.0      ;  total charge (mC)")' )
-         write(15,'("doing_phsp = 0		;  (ONE = TRUE)")' )
-         write(15,'("doing_kaon = 0		;  (ONE = TRUE) ")' )
+         write(15,'("doing_phsp = 0	;  (ONE = TRUE)")' )
+         write(15,'("doing_kaon = 0	;  (ONE = TRUE) ")' )
 
          if(iprocess.gt.1) then
-           write(15,'("doing_pion = 1		;  (ONE = TRUE)" )' )
+           write(15,'("doing_pion = 1	;  (ONE = TRUE)" )' )
          else
-           write(15,'("doing_pion = 0		;  (ONE = TRUE)" )' )
+           write(15,'("doing_pion = 0	;  (ONE = TRUE)" )' )
          endif
       
-         write(15,'("which_pion = 2          ;  2 = pi0'')')
+         write(15,'("which_pion = 2          ;  2 = pi0")')
+
+         write(15,'("doing_delta = 0         ; H(e,ep)pi0 ")' ) 
 
          if(iprocess.ne.3) then
-          write(15,'("doing_delta = 0         ; H(e,ep)pi0 ")' ) 
+          write(15,'("which_pion = 2          ;  2 = pi0 N")')
          else
-          write(15,'("doing_delta = 1         ; H(e,ep)pi0 ")' ) 
+          write(15,'("which_pion = 3          ;  3 = pi0 Delta")')
+         endif
+
+         if(iprocess.ne.1) then
+          write(15,'("doing_dvcs = 0          ;  not DVCS ")')
+         else
+          write(15,'("doing_dvcs = 1          ; doing DVCS ")')
          endif
 
          write(15,'("doing_rho = 0           ; exclusive rho ")')
@@ -187,8 +196,8 @@ c this is not used in NPS
         write(15,'("electron_arm = 1         ; 1=hms,2=sos,3=hrsr,4=hrsl,
      >  5=shms,7=calo (7=calo HMS side),")')
 
-        write(15,'("hadron_arm = 8           ; 1=hms,2=sos,3=hrsr,4=hrsl,
-     >  5=shms,7=calo (8=calo (SOS side)")' )
+        write(15,'("hadron_arm = 10           ; 1=hms,2=sos,3=hrsr,4=hrsl,
+     >  5=shms,7=calo 10=NPS")' )
 
 c this isn't used in NPS
         write(15,'("use_first_cer = 0        ; Use first cerenkov 
@@ -264,7 +273,7 @@ c these params are for the NPS calorimeter
         write(15,'("begin parm p_arm_accept")' )
 c set this to go down to 1.5 GeV pi0's or single photons
         delmin = -100. * (1 - 1.5 / pnps)
-        write(15,'("SPedge%p%delta%min = '',f72,'' ; delta min 
+        write(15,'("SPedge%p%delta%min = ",f7.2," ; delta min 
      >  ACCEPTANCE !)")' ) delmin
         write(15,'("SPedge%p%delta%max =  5.    ;  delta max")' )
         write(15,'("SPedge%p%yptar%min = -130.0   ; .yptar.min = 
@@ -384,7 +393,7 @@ c can set these to make central bin xsection tables
        write(15,'("sigc_kin_ind = 0.55   ; value for independent variable 
      > (z or pt2 in GeV2)")' ) 
        rseed = ikin + 100*itarg + 10000*iprocess + int(100000000.*phms) 
-       write(15,'("random_seed = ",i10,"   ; randm seed)")' ) rseed
+       write(15,'("random_seed = ",i12,"   ; randm seed)")' ) rseed
        write(15,'(" ")' )
 
        write(15,'("end parm simulate")' )

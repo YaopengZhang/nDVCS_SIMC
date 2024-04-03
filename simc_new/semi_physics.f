@@ -78,7 +78,7 @@ C Some local kinematic variables
 	real*8 cthpq
 
 	real*8 kcent,klo,khi
-	integer i
+	integer i,nprint
 
 	real*8 sum_sq, dsigdz, sigsemi, jacobian, fac, sigma_eepiX
 	real*8 sighad, sige
@@ -107,7 +107,7 @@ C parameters for PB fit of 9/20/2021
      >                 0.1518,  -1.2923,  -1.5710,   3.0305,
      >                 1.1995,   1.3553,   2.5868,   8.0666/
 
-	real*8 xp,zp,yf,yu
+	real*8 xp,zp,yf,yu,ampi,ampip/0.139/,ampi0/0.135/,am/0.938/
 	real*8 Mpi_gev, Mp_gev, wsq,w, mmpi2,z8, a8
 	real*8 d1,db,u1,ub, s1, sb, dsigdzn, dsigdzp
 
@@ -134,10 +134,14 @@ c this is for DSS
         real*8  C1, B1, GL1
         COMMON / FRAGINI / FINI
 
+c pyb added: charged or neutral pion mass
+	ampi = ampip
+	if(which_pion.eq.2) ampi = ampi0
+
 	if(first) FINI=0
 c	b = pt_b_param   ! now parameter in input file
 
-	Mpi_gev = Mpi/1000.0
+	Mpi_gev = ampi ! note change to this line
 	Mp_gev = Mp/1000.0
 C DJG: Setup stuff for doing "central" cross section calculation.  Here, I'm
 C DJG: assuming we want the cross section at some "point" in Q2 and W space.
@@ -215,7 +219,8 @@ c		 write(6,*) 'chessy poofs',pt2,klo,khi
 	endif
 
 	if(doing_semipi) then
-	   mhad = Mpi
+c pyb note change to allow for pi0
+	   mhad = ampi*1000.
 	else if(doing_semika) then
 	   mhad = Mk
 	else
@@ -476,6 +481,15 @@ c new PB fit using zp for pions. This is z * D
 	   db = u1
 	   s1 = yu
 	   sb = s1
+c for pi0
+	 if(which_pion.eq.2) then
+	  u1 = (yf + yu) / 2.
+	  d1 = (yf + yu) / 2.
+	  ub = (yf + yu) / 2.
+	  d1 = (yf + yu) / 2.
+ 	  if(nprint.lt.100) write(6,'(''doing pi0'')')
+	  nprint = nprint + 1
+	 endif
  	elseif(doing_semika) then
 	   IHdss=2 ! Kaons, 1=Pions
 	   IOdss=1 ! NLO

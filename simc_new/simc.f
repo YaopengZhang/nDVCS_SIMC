@@ -1470,6 +1470,8 @@ C DJG moved this to the last part of generate!!!
      >		y_P_arm, z_P_arm, dx_P_arm, dy_P_arm, xfp, dxfp, yfp, dyfp,
      >		m2, mc_smear, mc_smear, doing_decay,
      >		ntup%resfac, xtar_init_P, ok_P_arm, pathlen, hadron_arm)
+	  else if (hadron_arm.eq.10) then ! accept everything
+	    ok_p_arm = .true.
 	  endif
 
 
